@@ -1,0 +1,91 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id        Int        @id @default(autoincrement())
+  email     String     @unique
+  password  String
+  name      String
+  role      String     @default("USER") // USER or ADMIN
+  credits   Float      @default(0)
+  createdAt DateTime   @default(now())
+  groups    Group[]
+  contacts  Contact[]
+  campaigns Campaign[]
+}
+
+model Group {
+  id        Int        @id @default(autoincrement())
+  name      String
+  userId    Int
+  createdAt DateTime   @default(now())
+  user      User       @relation(fields: [userId], references: [id])
+  contacts  Contact[]
+  campaigns Campaign[]
+}
+
+model Contact {
+  id        Int       @id @default(autoincrement())
+  name      String
+  phone     String
+  groupId   Int
+  userId    Int
+  createdAt DateTime  @default(now())
+  group     Group     @relation(fields: [groupId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+  messages  Message[]
+
+  @@unique([phone, groupId])
+}
+
+model Campaign {
+  id            Int       @id @default(autoincrement())
+  userId        Int
+  groupId       Int
+  message       String
+  status        String    @default("DRAFT") // DRAFT, SCHEDULED, SENDING, COMPLETED, CANCELLED
+  scheduledAt   DateTime?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  totalContacts Int       @default(0)
+  sentCount     Int       @default(0)
+  failedCount   Int       @default(0)
+  creditsUsed   Float     @default(0)
+  createdAt     DateTime  @default(now())
+  user          User      @relation(fields: [userId], references: [id])
+  group         Group     @relation(fields: [groupId], references: [id])
+  messages      Message[]
+}
+
+model Message {
+  id           Int       @id @default(autoincrement())
+  campaignId   Int
+  contactId    Int
+  contactName  String
+  contactPhone String
+  content      String
+  parts        Int
+  cost         Float
+  status       String    @default("PENDING") // PENDING, SENT, FAILED
+  route        String?
+  sentAt       DateTime?
+  createdAt    DateTime  @default(now())
+  campaign     Campaign  @relation(fields: [campaignId], references: [id])
+  contact      Contact   @relation(fields: [contactId], references: [id])
+
+  @@unique([campaignId, contactId])
+}
+
+model Route {
+  id          Int    @id @default(autoincrement())
+  name        String @unique
+  priority    Int
+  balance     Float
+  failureRate Float
+}
