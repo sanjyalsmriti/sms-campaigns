@@ -6,7 +6,6 @@ const prisma = require('../db');
 
 const router = express.Router();
 
-// Cost preview for a group + message template
 router.post('/preview', authMiddleware, async (req, res) => {
   try {
     const { groupId, message } = req.body;
@@ -36,18 +35,12 @@ router.post('/preview', authMiddleware, async (req, res) => {
       };
     });
 
-    res.json({
-      totalContacts: contacts.length,
-      totalParts,
-      totalCost: totalParts, // 1 part = 1 credit
-      breakdown,
-    });
+    res.json({ totalContacts: contacts.length, totalParts, totalCost: totalParts, breakdown });
   } catch (err) {
     res.status(500).json({ error: 'Failed to generate preview' });
   }
 });
 
-// Create campaign
 router.post('/', authMiddleware, async (req, res) => {
   try {
     const { groupId, message, scheduledAt } = req.body;
@@ -60,71 +53,74 @@ router.post('/', authMiddleware, async (req, res) => {
     });
     if (!group) return res.status(404).json({ error: 'Group not found' });
 
-    const contacts = await prisma.contact.findMany({
-      where: { groupId: group.id },
-    });
+    const contacts = await prisma.contact.findMany({ where: { groupId: group.id } });
     if (contacts.length === 0) {
       return res.status(400).json({ error: 'Group has no contacts' });
     }
 
-    // Calculate total cost
     let totalCost = 0;
-    for (const c of contacts) {
-      totalCost += calculateCost(message, c.name);
-    }
-
-    // Check user has enough credits
-    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
-    if (user.credits < totalCost) {
-      return res.status(400).json({
-        error: `Insufficient credits. Need ${totalCost}, have ${user.credits}`,
-      });
-    }
+    const resolved = contacts.map((c) => {
+      const content = resolveMessage(message, c.name);
+      const parts = countParts(content).parts;
+      totalCost += parts;
+      return { contact: c, content, parts };
+    });
 
     const status = scheduledAt ? 'SCHEDULED' : 'DRAFT';
-    const campaign = await prisma.campaign.create({
-      data: {
-        userId: req.user.id,
-        groupId: group.id,
-        message,
-        status,
-        scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
-        totalContacts: contacts.length,
-      },
-    });
+    let campaign;
 
-    // Create message records for each contact and deduct total credits upfront
-    await prisma.$transaction(async (tx) => {
-      for (const c of contacts) {
-        const resolved = resolveMessage(message, c.name);
-        const parts = countParts(resolved).parts;
-        await tx.message.create({
+    try {
+      campaign = await prisma.$transaction(async (tx) => {
+        const user = await tx.user.findUnique({ where: { id: req.user.id } });
+        if (user.credits < totalCost) {
+          const err = new Error('INSUFFICIENT_CREDITS');
+          err.credits = user.credits;
+          throw err;
+        }
+
+        const newCampaign = await tx.campaign.create({
           data: {
-            campaignId: campaign.id,
-            contactId: c.id,
-            contactName: c.name,
-            contactPhone: c.phone,
-            content: resolved,
-            parts,
-            cost: parts,
-            status: 'PENDING',
+            userId: req.user.id,
+            groupId: group.id,
+            message,
+            status,
+            scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+            totalContacts: contacts.length,
+            creditsUsed: totalCost,
           },
         });
+
+        for (const { contact: c, content, parts } of resolved) {
+          await tx.message.create({
+            data: {
+              campaignId: newCampaign.id,
+              contactId: c.id,
+              contactName: c.name,
+              contactPhone: c.phone,
+              content,
+              parts,
+              cost: parts,
+              status: 'PENDING',
+            },
+          });
+        }
+
+        await tx.user.update({
+          where: { id: req.user.id },
+          data: { credits: { decrement: totalCost } },
+        });
+
+        return newCampaign;
+      });
+    } catch (err) {
+      if (err.message === 'INSUFFICIENT_CREDITS') {
+        return res.status(400).json({
+          error: `Not enough credits. Need ${totalCost}, have ${err.credits}`,
+        });
       }
+      throw err;
+    }
 
-      // Deduct credits from user upfront
-      await tx.user.update({
-        where: { id: req.user.id },
-        data: { credits: { decrement: totalCost } },
-      });
-
-      await tx.campaign.update({
-        where: { id: campaign.id },
-        data: { creditsUsed: totalCost },
-      });
-    });
-
-    // If send-now, start immediately
     if (!scheduledAt) {
       await prisma.campaign.update({
         where: { id: campaign.id },
@@ -140,7 +136,6 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 });
 
-// List campaigns
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const campaigns = await prisma.campaign.findMany({
@@ -154,7 +149,6 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 });
 
-// Get campaign report
 router.get('/:id', authMiddleware, async (req, res) => {
   try {
     const campaign = await prisma.campaign.findFirst({
