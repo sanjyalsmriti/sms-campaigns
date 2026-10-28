@@ -1,11 +1,10 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
 const { authMiddleware } = require('../middleware/auth');
 const { resolveMessage, countParts, calculateCost } = require('../utils/sms-utils');
 const { startCampaign } = require('../services/campaign-sender');
+const prisma = require('../db');
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 // Cost preview for a group + message template
 router.post('/preview', authMiddleware, async (req, res) => {

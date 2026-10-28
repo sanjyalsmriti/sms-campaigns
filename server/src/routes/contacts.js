@@ -2,13 +2,12 @@ const express = require('express');
 const multer = require('multer');
 const csv = require('csv-parser');
 const { Readable } = require('stream');
-const { PrismaClient } = require('@prisma/client');
 const { authMiddleware } = require('../middleware/auth');
 const { normalizePhone } = require('../utils/sms-utils');
+const prisma = require('../db');
 
 const router = express.Router();
-const prisma = new PrismaClient();
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
 
 // Upload CSV to a group
 router.post('/upload', authMiddleware, upload.single('file'), async (req, res) => {

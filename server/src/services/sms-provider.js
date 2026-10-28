@@ -1,5 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../db');
 
 // Simulate sending a message through a route.
 // Returns true on success, false on simulated failure.

@@ -1,8 +1,6 @@
 const cron = require('node-cron');
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../db');
 const { startCampaign } = require('./campaign-sender');
-
-const prisma = new PrismaClient();
 
 function initScheduler() {
   // Check every 30 seconds for scheduled campaigns that are due

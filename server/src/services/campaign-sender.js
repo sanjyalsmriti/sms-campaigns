@@ -1,7 +1,5 @@
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../db');
 const { sendWithFailover } = require('./sms-provider');
-
-const prisma = new PrismaClient();
 const BATCH_SIZE = 50;
 
 async function startCampaign(campaignId) {
