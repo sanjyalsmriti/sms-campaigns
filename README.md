@@ -67,11 +67,3 @@ The sender tries routes lowest-priority-number first. A failed attempt moves to 
 ## Background sending
 
 Messages are processed in batches of 50. The scheduler checks every 30 seconds for campaigns whose `scheduledAt` has passed and claims them with an atomic `updateMany` (so two overlapping ticks cannot start the same campaign twice). On restart, any campaign still in SENDING status is resumed automatically — only PENDING messages are picked up, so already-sent messages are not retried.
-
-## What I'd do differently with more time
-
-- Move the campaign sender to a proper job queue (Bull/BullMQ) so it survives process crashes more cleanly
-- Add tests, especially around the credit accounting and SMS part-counting logic
-- Paginate contacts and campaign message lists
-- Add rate limiting on auth endpoints
-- Tighten CORS to the specific frontend origin
