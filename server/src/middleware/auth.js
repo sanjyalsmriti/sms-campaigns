@@ -1,5 +1,9 @@
 const jwt = require('jsonwebtoken');
 
+if (!process.env.JWT_SECRET) {
+  console.warn('WARNING: JWT_SECRET not set. Using insecure default — set it before deploying.');
+}
+
 const JWT_SECRET = process.env.JWT_SECRET || 'sms-campaign-secret-key';
 
 function authMiddleware(req, res, next) {
