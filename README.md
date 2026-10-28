@@ -1,94 +1,77 @@
 # Bulk SMS Campaign Manager
 
-A full-stack application for creating and running SMS campaigns. Upload contacts via CSV, compose personalised messages, send immediately or schedule for later, and watch delivery progress in real time.
+Upload contacts via CSV, compose a message with a `{name}` placeholder, and send to a group immediately or on a schedule. A background job handles delivery in batches using mock SMS routes with failover.
 
-## Tech Stack
+## Stack
 
-- **Backend:** Node.js, Express, Prisma ORM, SQLite
+- **Backend:** Node.js, Express, Prisma, SQLite
 - **Frontend:** React (Vite), Tailwind CSS, React Router
-- **Auth:** bcrypt + JWT
-- **Background jobs:** In-process campaign sender + node-cron scheduler
-
-No external services required. SQLite is embedded — just Node.js is needed.
+- **Auth:** JWT (bcrypt for passwords)
+- **Scheduling:** node-cron
 
 ## Setup
 
 ```bash
-# 1. Clone and install
-git clone <repo-url>
-cd <repo>
-
-# 2. Backend
+# Backend
 cd server
+cp .env.example .env   # edit JWT_SECRET
 npm install
 npx prisma migrate dev --name init
 node prisma/seed.js
-npm run dev
+npm run dev            # http://localhost:4000
 
-# 3. Frontend (new terminal)
+# Frontend (new terminal)
 cd client
 npm install
-npm run dev
+npm run dev            # http://localhost:3000
 ```
 
-The API runs on `http://localhost:4000`, the frontend on `http://localhost:3000` (proxied to the API).
+## Seed accounts
 
-## Seed Accounts
+| Email           | Password    | Role  | Credits |
+|-----------------|-------------|-------|---------|
+| admin@test.com  | password123 | ADMIN | 10,000  |
+| user@test.com   | password123 | USER  | 100     |
 
-| Email            | Password      | Role  | Credits |
-|------------------|---------------|-------|---------|
-| admin@test.com   | password123   | ADMIN | 10,000  |
-| user@test.com    | password123   | USER  | 100     |
+These are for local development only. Change or remove them before deploying.
 
-The seed also creates three mock SMS routes and a sample contact group with 10 Nepali phone numbers.
+## SMS rules
 
-## How It Works
+Part counts follow the Nest Nepal spec:
 
-### SMS Counting Rules
+| Encoding | Single SMS | Multi-part |
+|----------|-----------|------------|
+| GSM-7    | 160 chars | 153 per part |
+| Unicode  | 70 chars  | 67 per part  |
 
-Every message cost depends on its encoding and length:
+Any character outside the GSM-7 alphabet (Nepali script, emoji, etc.) switches the whole message to Unicode. `{name}` is substituted per contact before counting, so contacts with longer names may produce more parts and cost more.
 
-- **GSM-7** (standard A–Z, digits, common symbols): 160 chars per single SMS, 153 per part in multi-part messages.
-- **Unicode** (Nepali, emoji, etc.): 70 chars per single SMS, 67 per part.
+Valid Nepali mobile numbers are 10 digits starting with `97` or `98`. Prefixes `+977` and `977` are stripped on upload.
 
-The `{name}` placeholder is resolved per contact *before* counting, so different names can produce different part counts.
+## Credit flow
 
-### Phone Validation
+Credits are deducted upfront when a campaign is created (inside a single database transaction that also checks the balance). If a message fails on every route, the cost is refunded to the user in the same transaction that marks it FAILED.
 
-Valid Nepali mobile numbers: 10 digits starting with `97` or `98`. Prefixes `+977` and `977` are stripped automatically. Invalid numbers are rejected during CSV upload.
+The balance check and deduction happen atomically, so two concurrent campaign creations cannot both pass a balance check they shouldn't.
 
-### Credit Deduction
+## Mock SMS routes
 
-1. When a campaign is created, the total cost is calculated per-contact (because `{name}` changes message length) and deducted upfront from the user's wallet.
-2. Each message is sent through mock routes with failover.
-3. If a message fails on every route, its cost is refunded to the user.
+| Route   | Priority | Balance | Failure rate |
+|---------|----------|---------|-------------|
+| ROUTE_A | 1        | 1,000   | 30%         |
+| ROUTE_B | 2        | 500     | 20%         |
+| ROUTE_C | 3        | 300     | 10%         |
 
-This upfront-deduct-then-refund approach prevents overspending while ensuring failed messages aren't permanently charged.
+The sender tries routes lowest-priority-number first. A failed attempt moves to the next route with sufficient balance.
 
-### No Double Charging
+## Background sending
 
-Three safeguards:
+Messages are processed in batches of 50. The scheduler checks every 30 seconds for campaigns whose `scheduledAt` has passed and claims them with an atomic `updateMany` (so two overlapping ticks cannot start the same campaign twice). On restart, any campaign still in SENDING status is resumed automatically — only PENDING messages are picked up, so already-sent messages are not retried.
 
-- **Unique constraint** on `(campaignId, contactId)` — duplicate message records can't be created.
-- **Idempotent processing** — the sender only picks up `PENDING` messages. Once marked `SENT` or `FAILED`, a message is never reprocessed.
-- **Atomic transactions** — status updates and credit adjustments happen inside database transactions.
+## What I'd do differently with more time
 
-On server restart, any campaign stuck in `SENDING` is automatically resumed. Only its remaining `PENDING` messages are processed.
-
-### Mock SMS Routes
-
-| Route   | Priority | Initial Balance | Failure Rate |
-|---------|----------|-----------------|-------------|
-| ROUTE_A | 1        | 1,000           | 30%         |
-| ROUTE_B | 2        | 500             | 20%         |
-| ROUTE_C | 3        | 300             | 10%         |
-
-The sender tries the highest-priority route with available balance first. On failure, it falls through to the next route. Route balances are tracked in the database and decrease with each successful send.
-
-### Background Sending
-
-The campaign sender processes messages in batches of 50.
-
-### Live Reporting
-
-The campaign report page polls the API every 2 seconds while a campaign is sending. The progress bar, sent/failed counts, and credits used update in real time.
+- Move the campaign sender to a proper job queue (Bull/BullMQ) so it survives process crashes more cleanly
+- Add tests, especially around the credit accounting and SMS part-counting logic
+- Paginate contacts and campaign message lists
+- Add rate limiting on auth endpoints
+- Tighten CORS to the specific frontend origin
