@@ -6,6 +6,7 @@ export default function Admin() {
   const [users, setUsers] = useState([]);
   const [routes, setRoutes] = useState([]);
   const [topupAmounts, setTopupAmounts] = useState({});
+  const [topupError, setTopupError] = useState('');
   const [loading, setLoading] = useState(true);
 
   const loadData = async () => {
@@ -31,12 +32,13 @@ export default function Admin() {
     const amount = parseFloat(topupAmounts[userId]);
     if (!amount || amount <= 0) return;
 
+    setTopupError('');
     try {
       await api.post(`/admin/users/${userId}/topup`, { amount });
       setTopupAmounts((prev) => ({ ...prev, [userId]: '' }));
       loadData();
     } catch (err) {
-      alert(err.message);
+      setTopupError(err.message);
     }
   };
 
@@ -52,7 +54,6 @@ export default function Admin() {
     <Layout>
       <h1 className="text-xl font-bold mb-6">Admin Panel</h1>
 
-      {/* Route Health */}
       <div className="bg-white rounded shadow overflow-hidden mb-6">
         <h2 className="font-semibold p-5 pb-3">Route Health</h2>
         <table className="w-full text-sm">
@@ -87,9 +88,11 @@ export default function Admin() {
         </table>
       </div>
 
-      {/* Users and Credits */}
       <div className="bg-white rounded shadow overflow-hidden">
-        <h2 className="font-semibold p-5 pb-3">Users</h2>
+        <div className="flex items-center justify-between px-5 pt-5 pb-3">
+          <h2 className="font-semibold">Users</h2>
+          {topupError && <p className="text-sm text-red-600">{topupError}</p>}
+        </div>
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-left">
             <tr>
