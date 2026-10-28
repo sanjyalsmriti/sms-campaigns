@@ -9,7 +9,6 @@ const prisma = require('../db');
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
 
-// Upload CSV to a group
 router.post('/upload', authMiddleware, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
@@ -21,7 +20,6 @@ router.post('/upload', authMiddleware, upload.single('file'), async (req, res) =
       return res.status(400).json({ error: 'Group name is required' });
     }
 
-    // Create or find group
     let group = await prisma.group.findFirst({
       where: { name: groupName, userId: req.user.id },
     });
@@ -31,7 +29,6 @@ router.post('/upload', authMiddleware, upload.single('file'), async (req, res) =
       });
     }
 
-    // Parse CSV
     const rows = [];
     const errors = [];
     const stream = Readable.from(req.file.buffer.toString());
@@ -56,7 +53,6 @@ router.post('/upload', authMiddleware, upload.single('file'), async (req, res) =
         .on('error', reject);
     });
 
-    // Deduplicate within the parsed rows
     const seen = new Set();
     const unique = [];
     for (const row of rows) {
@@ -67,7 +63,6 @@ router.post('/upload', authMiddleware, upload.single('file'), async (req, res) =
     }
     const duplicatesInFile = rows.length - unique.length;
 
-    // Insert contacts, skipping duplicates already in the group
     let added = 0;
     let skipped = 0;
     for (const { name, phone } of unique) {
@@ -77,7 +72,6 @@ router.post('/upload', authMiddleware, upload.single('file'), async (req, res) =
         });
         added++;
       } catch (err) {
-        // Unique constraint violation — already exists in group
         if (err.code === 'P2002') {
           skipped++;
         } else {
@@ -94,7 +88,7 @@ router.post('/upload', authMiddleware, upload.single('file'), async (req, res) =
       duplicatesInFile,
       duplicatesInGroup: skipped,
       invalid: errors.length,
-      errors: errors.slice(0, 20), // show first 20 errors
+      errors: errors.slice(0, 20),
     });
   } catch (err) {
     console.error('CSV upload error:', err);
@@ -102,7 +96,6 @@ router.post('/upload', authMiddleware, upload.single('file'), async (req, res) =
   }
 });
 
-// List contacts (optionally by group)
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const where = { userId: req.user.id };

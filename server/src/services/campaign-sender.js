@@ -1,11 +1,10 @@
 const prisma = require('../db');
 const { sendWithFailover } = require('./sms-provider');
+
 const BATCH_SIZE = 50;
 
 async function startCampaign(campaignId) {
   try {
-    // Process in batches
-    let processed = 0;
     while (true) {
       const messages = await prisma.message.findMany({
         where: { campaignId, status: 'PENDING' },
@@ -17,14 +16,11 @@ async function startCampaign(campaignId) {
 
       for (const msg of messages) {
         await processMessage(campaignId, msg);
-        processed++;
       }
 
-      // Small delay between batches to simulate real-world processing
       await sleep(100);
     }
 
-    // Mark campaign as completed
     await prisma.campaign.update({
       where: { id: campaignId },
       data: { status: 'COMPLETED', completedAt: new Date() },
@@ -35,14 +31,13 @@ async function startCampaign(campaignId) {
 }
 
 async function processMessage(campaignId, msg) {
-  // Double-check message is still PENDING (idempotency guard)
+  // Re-read before acting so a restart that picks up mid-batch doesn't re-send.
   const current = await prisma.message.findUnique({ where: { id: msg.id } });
   if (!current || current.status !== 'PENDING') return;
 
   const result = await sendWithFailover(msg.cost);
 
   if (result.success) {
-    // Mark as sent
     await prisma.$transaction([
       prisma.message.update({
         where: { id: msg.id },
@@ -54,7 +49,6 @@ async function processMessage(campaignId, msg) {
       }),
     ]);
   } else {
-    // All routes failed — refund credits to user
     await prisma.$transaction(async (tx) => {
       await tx.message.update({
         where: { id: msg.id },
@@ -62,12 +56,8 @@ async function processMessage(campaignId, msg) {
       });
       await tx.campaign.update({
         where: { id: campaignId },
-        data: {
-          failedCount: { increment: 1 },
-          creditsUsed: { decrement: msg.cost },
-        },
+        data: { failedCount: { increment: 1 }, creditsUsed: { decrement: msg.cost } },
       });
-      // Refund credits to the campaign owner
       const campaign = await tx.campaign.findUnique({ where: { id: campaignId } });
       await tx.user.update({
         where: { id: campaign.userId },
@@ -76,7 +66,6 @@ async function processMessage(campaignId, msg) {
     });
   }
 
-  // Small delay to simulate network latency
   await sleep(50);
 }
 

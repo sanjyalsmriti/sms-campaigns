@@ -1,6 +1,5 @@
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
 
 const authRoutes = require('./routes/auth');
 const contactRoutes = require('./routes/contacts');
@@ -15,14 +14,12 @@ const PORT = process.env.PORT || 4000;
 app.use(cors());
 app.use(express.json());
 
-// API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/contacts', contactRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/campaigns', campaignRoutes);
 app.use('/api/admin', adminRoutes);
 
-// Health check
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
 app.listen(PORT, () => {
