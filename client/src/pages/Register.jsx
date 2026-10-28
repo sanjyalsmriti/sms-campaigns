@@ -22,50 +22,63 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        <h1 className="text-2xl font-bold text-center mb-6">SMS Campaign Manager</h1>
-        <form onSubmit={handleSubmit} className="bg-white p-6 rounded shadow space-y-4">
-          <h2 className="text-lg font-semibold">Register</h2>
-          {error && <p className="text-red-600 text-sm">{error}</p>}
-          <input
-            type="text"
-            placeholder="Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full border rounded px-3 py-2 text-sm"
-            required
-          />
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full border rounded px-3 py-2 text-sm"
-            required
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full border rounded px-3 py-2 text-sm"
-            required
-            minLength={6}
-          />
-          <button
-            type="submit"
-            className="w-full bg-blue-600 text-white py-2 rounded text-sm font-medium hover:bg-blue-700"
-          >
+        <div className="mb-6 text-center">
+          <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-slate-900 font-semibold text-white">
+            S
+          </div>
+          <h1 className="text-2xl font-semibold tracking-tight">Create an account</h1>
+          <p className="mt-1 text-sm text-slate-500">Start sending SMS campaigns.</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="card space-y-4 p-6">
+          {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+          <div>
+            <label htmlFor="name" className="label">Name</label>
+            <input
+              id="name"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="input"
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="email" className="label">Email</label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="input"
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="password" className="label">Password</label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="input"
+              required
+              minLength={6}
+            />
+          </div>
+          <button type="submit" className="btn-primary w-full">
             Register
           </button>
-          <p className="text-sm text-center text-gray-500">
-            Already have an account?{' '}
-            <Link to="/login" className="text-blue-600 hover:underline">
-              Log In
-            </Link>
-          </p>
         </form>
+
+        <p className="mt-4 text-center text-sm text-slate-500">
+          Already have an account?{' '}
+          <Link to="/login" className="link">
+            Log in
+          </Link>
+        </p>
       </div>
     </div>
   );
